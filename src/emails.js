@@ -1,6 +1,6 @@
 const url = process.env.CLIENT_URL
 // const fromEmail = 'noreply@enamel.tech'
-const fromEmail = 'kenzotakahashi2@gmail.com'
+const fromEmail = process.env.FROM_EMAIL
 
 module.exports.invitationEmail = function (email, user, thisUser) {
   const text = `
@@ -8,7 +8,7 @@ Hi,
 
 Please accept this invite to enamel, our tool for work management and collaboration.
 
-Using enamel, we plan and track projects, 
+Using enamel, we plan and track projects,
 discuss ideas, and collaborate to get work done.
 
 Accept invitation\n
@@ -32,10 +32,10 @@ ${thisUser.name}
   }
 }
 
-module.exports.welcomeEmail = function(email, user) {
+module.exports.welcomeEmail = function (email, user) {
   const text = `
 Hi,
-Thank you for choosing enamel! 
+Thank you for choosing enamel!
 You are just one click away from completing your account registration.
 
 Confirm your email:\n
@@ -53,22 +53,20 @@ ${url}/signup/${user.id}
   }
 }
 
-module.exports.notificationNewUser = function(email, user) {
-   const text = `
+module.exports.notificationNewUser = function (email, user) {
+  const text = `
 New user:
 
 ${email}
  `
 
-   return {
-     to: `kenzotakahashi2@gmail.com`,
-     from: {
-       address: fromEmail,
-       name: 'enamel'
-     },
-     subject: 'New user on enamel',
-     text
-   } 
+  return {
+    to: `kenzotakahashi2@gmail.com`,
+    from: {
+      address: fromEmail,
+      name: 'enamel'
+    },
+    subject: 'New user on enamel',
+    text
+  }
 }
-
-

@@ -1,5 +1,9 @@
-const { GraphQLScalarType } = require('graphql')
-const { withFilter } = require('graphql-yoga')
+const {
+  GraphQLScalarType
+} = require('graphql')
+const {
+  withFilter
+} = require('graphql-yoga')
 const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const req = require('request')
@@ -10,61 +14,90 @@ const ObjectId = mongoose.Types.ObjectId
 // const sg = require('@sendgrid/mail')
 // sg.setApiKey(process.env.SENDGRID_API_KEY)
 
-const { User, Folder, Project, Team, Group, Record, Task,
-  Log, LogCreated, LogStatus, LogAssign, Comment } = require('./models')
-const { getUserId } = require('./utils')
-const { welcomeEmail, invitationEmail, notificationNewUser } = require('./emails')
+const {
+  User,
+  Folder,
+  Project,
+  Team,
+  Group,
+  Record,
+  Task,
+  Log,
+  LogCreated,
+  LogStatus,
+  LogAssign,
+  Comment
+} = require('./models')
+const {
+  getUserId
+} = require('./utils')
+const {
+  welcomeEmail,
+  invitationEmail,
+  notificationNewUser
+} = require('./emails')
 
 const JWT_SECRET = process.env.JWT_SECRET
 
 const transporter = nodeMailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-      user: 'kenzotakahashi2@gmail.com',
-      pass: process.env.GMAIL_PASSWORD
-    }
-})
+  service: 'gmail',
+  auth: {
+    user: process.env.FROM_EMAIL,
+    pass: process.env.GMAIL_PASSWORD // naturally, replace both with your real credentials or an application-specific password
+  }
+});
 
 async function folderCommon(request, parent, name, shareWith) {
   const userId = getUserId(request)
   return {
     name,
     parent: parent || undefined,
-    shareWith: shareWith.concat(parent
-      ? []
-      : [{
-        kind: 'Team',
-        item: (await User.findById(userId)).team
-      }].concat(['External User', 'Collaborator']
-        .includes((await User.findById(userId)).role)
-        ? [{kind: 'User', item: userId}] : [])
-    ),
+    shareWith: shareWith.concat(parent ? [] : [{
+      kind: 'Team',
+      item: (await User.findById(userId)).team
+    }].concat(['External User', 'Collaborator']
+      .includes((await User.findById(userId)).role) ? [{
+        kind: 'User',
+        item: userId
+      }] : [])),
     order: moment().valueOf()
   }
 }
 
 async function deleteSubTasks(id) {
-  await Comment.deleteMany({'parent.item': id})
-  const tasks = await Task.find({parent: id})
+  await Comment.deleteMany({
+    'parent.item': id
+  })
+  const tasks = await Task.find({
+    parent: id
+  })
   for (const task of tasks) {
     await deleteSubTasks(task.id)
-    await Task.deleteOne({_id: task.id})
+    await Task.deleteOne({
+      _id: task.id
+    })
   }
 }
 
 async function deleteSubfolders(id) {
-  const tasks = await Task.find({ folders: id })
+  const tasks = await Task.find({
+    folders: id
+  })
   for (const task of tasks) {
-    await Task.deleteOne({_id: task.id})
+    await Task.deleteOne({
+      _id: task.id
+    })
     deleteSubTasks(task.id)
   }
-  const folders = await Folder.find({parent: id})
+  const folders = await Folder.find({
+    parent: id
+  })
   for (const folder of folders) {
-   await deleteSubfolders(folder.id)
-   await Folder.deleteOne({_id: folder.id})
-  } 
+    await deleteSubfolders(folder.id)
+    await Folder.deleteOne({
+      _id: folder.id
+    })
+  }
 }
 
 function populateTask(promise) {
@@ -81,20 +114,30 @@ function randomChoice(arr) {
 }
 
 const avatarColors = [
-  "D81B60","F06292","F48FB1","FFB74D","FF9800","F57C00","00897B","4DB6AC","80CBC4",
-  "80DEEA","4DD0E1","00ACC1","9FA8DA","7986CB","3949AB","8E24AA","BA68C8","CE93D8"
+  "D81B60", "F06292", "F48FB1", "FFB74D", "FF9800", "F57C00", "00897B", "4DB6AC", "80CBC4",
+  "80DEEA", "4DD0E1", "00ACC1", "9FA8DA", "7986CB", "3949AB", "8E24AA", "BA68C8", "CE93D8"
 ]
 
 async function getTasks_(parent, folder) {
   if (parent) {
-    return await populateTask(Task.find({ parent })).sort({ order: 1 })
+    return await populateTask(Task.find({
+      parent
+    })).sort({
+      order: 1
+    })
   } else {
-    return await populateTask(Task.find({ folders: folder })).sort({ order: -1 })
+    return await populateTask(Task.find({
+      folders: folder
+    })).sort({
+      order: -1
+    })
   }
 }
 
 async function getSubfolders(id) {
-  const folders = await Folder.find({ parent: id })
+  const folders = await Folder.find({
+    parent: id
+  })
   let list = []
   for (const folder of folders) {
     list.push(folder.id)
@@ -105,17 +148,25 @@ async function getSubfolders(id) {
 
 async function getFolders_(parent, userId) {
   if (parent) {
-    return await Folder.find({parent}).sort({ order: 1 })
+    return await Folder.find({
+      parent
+    }).sort({
+      order: 1
+    })
   } else {
     const user = await User.findById(userId)
-    const groups = await Group.find({users: ObjectId(userId)}, '_id')
+    const groups = await Group.find({
+      users: ObjectId(userId)
+    }, '_id')
     const ids = groups.map(o => o._id).concat(
-      ['External User', 'Collaborator'].includes(user.role)
-      ? [ObjectId(userId)]
-      : [ObjectId(userId), user.team]
+      ['External User', 'Collaborator'].includes(user.role) ? [ObjectId(userId)] : [ObjectId(userId), user.team]
     )
-    return await Folder.find({ 'shareWith.item': ids })
-      .populate('shareWith').sort({ order: 1 })
+    return await Folder.find({
+        'shareWith.item': ids
+      })
+      .populate('shareWith').sort({
+        order: 1
+      })
   }
 }
 
@@ -139,52 +190,84 @@ async function sendSlackNotification(rootFolder, userId, task, fallback, text) {
   if (!rootFolder.slack) return
   const user = await User.findById(userId)
   const link = `${process.env.CLIENT_URL}/w/folder/${rootFolder.id}/list/${task.id}`
-  req.post(rootFolder.slack, {json: {"attachments": [{
-      "fallback": `${user.name} ${fallback} ${link}`,
-      "text": text,
-      "author_name": user.name,
-      "title": task.name,
-      "title_link": link
-    }]}},
+  req.post(rootFolder.slack, {
+      json: {
+        "attachments": [{
+          "fallback": `${user.name} ${fallback} ${link}`,
+          "text": text,
+          "author_name": user.name,
+          "title": task.name,
+          "title_link": link
+        }]
+      }
+    },
     function (error, response, body) {
       if (!error && response.statusCode == 200) {
         console.log(body)
       }
     }
-  )  
+  )
 }
 
 const resolvers = {
   Query: {
-    async getTeam (_, args, {request, pubsub}) {
+    async getTeam(_, args, {
+      request,
+      pubsub
+    }) {
       const userId = getUserId(request)
       const user = await User.findById(userId)
       return await Team.findById(user.team)
     },
-    async getGroup (_, {id}, {request}) {
+    async getGroup(_, {
+      id
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       const group = await Group.findById(id).populate('users')
       return group
     },
-    async getGroups (_, args, {request}) {
+    async getGroups(_, args, {
+      request
+    }) {
       const userId = getUserId(request)
       const team = (await User.findById(userId)).team
-      return await Group.find({team}).sort({ createdAt: -1 })
+      return await Group.find({
+        team
+      }).sort({
+        createdAt: -1
+      })
       return group
     },
-    async getFolders (_, {parent}, {request}) {
+    async getFolders(_, {
+      parent
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       return getFolders_(parent, userId)
     },
-    async getFolder (_, args, {request}) {
+    async getFolder(_, args, {
+      request
+    }) {
       const userId = getUserId(request)
       return await Folder.findById(args.id).populate('shareWith')
     },
-    async getTasks (_, {parent, folder}, {request}) {
+    async getTasks(_, {
+      parent,
+      folder
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       return getTasks_(parent, folder)
     },
-    async getTask (_, {id}, {request}) {
+    async getTask(_, {
+      id
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       const task = await populateTask(Task.findById(id))
       if (!task) {
@@ -192,43 +275,81 @@ const resolvers = {
       }
       return task
     },
-    async getAllTasks (_, {folder}, {request}) {
+    async getAllTasks(_, {
+      folder
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       const folders = await getSubfolders(folder)
       folders.push(folder)
-      return await populateTask(Task.find({ folders: {$in: folders} }))
+      return await populateTask(Task.find({
+        folders: {
+          $in: folders
+        }
+      }))
     },
-    async getUser (_, {id}, {request}) {
+    async getUser(_, {
+      id
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       return await User.findById(id || userId)
     },
-    async getUsers (_, args, {request}) {
+    async getUsers(_, args, {
+      request
+    }) {
       const userId = getUserId(request)
       const team = (await User.findById(userId)).team
-      return await User.find({team})
+      return await User.find({
+        team
+      })
     },
-    async getComments (_, {target}, {request}) {
-      return await Comment.find({'target.item': ObjectId(target)})
-                          .populate('user', 'firstname lastname avatarColor')
+    async getComments(_, {
+      target
+    }, {
+      request
+    }) {
+      return await Comment.find({
+          'target.item': ObjectId(target)
+        })
+        .populate('user', 'firstname lastname avatarColor')
     },
-    async getLogs (_, args, {request}) {
+    async getLogs(_, args, {
+      request
+    }) {
       const userId = getUserId(request)
       const team = (await User.findById(userId)).team
       const teamMembers = await User.find({
         team,
-        _id: { $ne: userId }
+        _id: {
+          $ne: userId
+        }
       })
 
-      return await Log.find({user: {$in: teamMembers.map(o => o.id)}})
+      return await Log.find({
+          user: {
+            $in: teamMembers.map(o => o.id)
+          }
+        })
         .limit(30)
-        .sort({ createdAt: -1 })
+        .sort({
+          createdAt: -1
+        })
         .populate('user', 'firstname lastname avatarColor')
         .populate('target.item', 'name')
     },
-    async getRecord (_, {id, task, date}, {request}) {
+    async getRecord(_, {
+      id,
+      task,
+      date
+    }, {
+      request
+    }) {
       const user = getUserId(request)
       if (id) {
-        return await Record.findById(id)       
+        return await Record.findById(id)
       } else {
         return await Record.findOne({
           user,
@@ -240,7 +361,12 @@ const resolvers = {
         }).populate('task')
       }
     },
-    async getRecords (_, {id, date}, {request}) {
+    async getRecords(_, {
+      id,
+      date
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       return await Record.find({
         user: id,
@@ -248,11 +374,18 @@ const resolvers = {
           $gte: moment(date).startOf('month'),
           $lte: moment(date).endOf('month')
         }
-      }).sort({ date: 1 }).populate('task')
+      }).sort({
+        date: 1
+      }).populate('task')
     }
   },
   Mutation: {
-    async createComment(_, {body, target}, {request}) {
+    async createComment(_, {
+      body,
+      target
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       const comment = await Comment.create({
         body,
@@ -271,12 +404,25 @@ const resolvers = {
       return await Comment.findById(comment.id)
         .populate('user', 'firstname lastname avatarColor')
     },
-    async deleteComment (_, {id}, {request}) {
+    async deleteComment(_, {
+      id
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      await Comment.deleteOne({_id: id})
+      await Comment.deleteOne({
+        _id: id
+      })
       return true
     },
-    async createTask(_, {folder, parent, name}, {request, pubsub}) {
+    async createTask(_, {
+      folder,
+      parent,
+      name
+    }, {
+      request,
+      pubsub
+    }) {
       const userId = getUserId(request)
       const task = await Task.create({
         name,
@@ -300,13 +446,20 @@ const resolvers = {
 
       return await populateTask(Task.findById(task.id))
     },
-    async updateTask(_, {id, input}, {request}) {
+    async updateTask(_, {
+      id,
+      input
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      const task = await populateTask(Task.findOneAndUpdate(
-        { _id: id },
-        { $set: input },
-        { new: true }
-      ))
+      const task = await populateTask(Task.findOneAndUpdate({
+        _id: id
+      }, {
+        $set: input
+      }, {
+        new: true
+      }))
 
       if (input.status) {
         LogStatus.create({
@@ -332,27 +485,58 @@ const resolvers = {
 
       return task
     },
-    async sortTasks(_, {tasks, orders, parent, folder}, {request}) {
+    async sortTasks(_, {
+      tasks,
+      orders,
+      parent,
+      folder
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       for (const [i, id] of tasks.entries()) {
-        await Task.findOneAndUpdate(
-          { _id: id },
-          { $set: {order: orders[i]} },
-        )
+        await Task.findOneAndUpdate({
+          _id: id
+        }, {
+          $set: {
+            order: orders[i]
+          }
+        }, )
       }
       return getTasks_(parent, folder)
     },
-    async deleteTask(_, {id}, {request}) {
+    async deleteTask(_, {
+      id
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      await Task.deleteOne({_id: id})
+      await Task.deleteOne({
+        _id: id
+      })
       deleteSubTasks(id)
       return true
     },
-    async createFolder(_, {parent, name, shareWith}, {request}) {
+    async createFolder(_, {
+      parent,
+      name,
+      shareWith
+    }, {
+      request
+    }) {
       const folder = await Folder.create(await folderCommon(request, parent, name, shareWith))
       return await Folder.findById(folder.id).populate('shareWith.item')
     },
-    async createProject(_, {parent, name, shareWith, owners, startDate, finishDate}, {request}) {
+    async createProject(_, {
+      parent,
+      name,
+      shareWith,
+      owners,
+      startDate,
+      finishDate
+    }, {
+      request
+    }) {
       const common = await folderCommon(request, parent, name, shareWith)
       const folder = await Project.create(Object.assign(common, {
         owners,
@@ -362,32 +546,58 @@ const resolvers = {
       }))
       return await Project.findById(folder.id).populate('shareWith.item')
     },
-    async updateFolder(_, {id, input}, {request}) {
+    async updateFolder(_, {
+      id,
+      input
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      return await Folder.findOneAndUpdate(
-        { _id: id },
-        { $set: input },
-        { new: true }
-      ).populate('shareWith')
+      return await Folder.findOneAndUpdate({
+        _id: id
+      }, {
+        $set: input
+      }, {
+        new: true
+      }).populate('shareWith')
     },
-    async sortFolders(_, {folders, orders, parent}, {request}) {
+    async sortFolders(_, {
+      folders,
+      orders,
+      parent
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       for (const [i, id] of folders.entries()) {
-        await Folder.findOneAndUpdate(
-          { _id: id },
-          { $set: {order: orders[i]} },
-        )
+        await Folder.findOneAndUpdate({
+          _id: id
+        }, {
+          $set: {
+            order: orders[i]
+          }
+        }, )
       }
       return getFolders_(parent, userId)
     },
-    async deleteFolder(_, {id}, {request}) {
+    async deleteFolder(_, {
+      id
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      await Folder.deleteOne({_id: id})
+      await Folder.deleteOne({
+        _id: id
+      })
       deleteSubfolders(id)
       return true
     },
-    async captureEmail (_, {email}) {
-      const isEmailTaken = await User.findOne({email})
+    async captureEmail(_, {
+      email
+    }) {
+      const isEmailTaken = await User.findOne({
+        email
+      })
       if (isEmailTaken) {
         throw new Error('This email is already taken')
       }
@@ -403,15 +613,22 @@ const resolvers = {
 
       return user
     },
-    async invite (_, {emails, groups, role}, {request}) {
+    async invite(_, {
+      emails,
+      groups,
+      role
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       const thisUser = await User.findById(userId)
       const team = thisUser.team
-      const teamMembers = (await User.find({team}, 'email')).map(o => o.email)
+      const teamMembers = (await User.find({
+        team
+      }, 'email')).map(o => o.email)
       const users = []
       for (const email of emails) {
-        if (teamMembers.includes(email)) {
-        } else {
+        if (teamMembers.includes(email)) {} else {
           const user = await User.create({
             email,
             team,
@@ -430,14 +647,24 @@ const resolvers = {
       }
       return users
     },
-    async decline (_, {id}) {
-      await User.findOneAndUpdate(
-        { _id: id },
-        { $set: { status: 'Declined' } },
-      )
+    async decline(_, {
+      id
+    }) {
+      await User.findOneAndUpdate({
+        _id: id
+      }, {
+        $set: {
+          status: 'Declined'
+        }
+      }, )
       return true
     },
-    async signup (_, {id, firstname, lastname, password}) {
+    async signup(_, {
+      id,
+      firstname,
+      lastname,
+      password
+    }) {
       const user = await User.findById(id)
       const common = {
         firstname,
@@ -459,11 +686,22 @@ const resolvers = {
         user.set(common)
       }
       await user.save()
-      const token = jwt.sign({id: user.id, email: user.email}, JWT_SECRET)
-      return {token, user}
+      const token = jwt.sign({
+        id: user.id,
+        email: user.email
+      }, JWT_SECRET)
+      return {
+        token,
+        user
+      }
     },
-    async login (_, {email, password}) {
-      const user = await User.findOne({email})
+    async login(_, {
+      email,
+      password
+    }) {
+      const user = await User.findOne({
+        email
+      })
       if (!user) {
         throw new Error('No user with that email')
       }
@@ -471,8 +709,14 @@ const resolvers = {
       if (!valid) {
         throw new Error('Incorrect password')
       }
-      const token = jwt.sign({id: user.id, email}, JWT_SECRET)
-      return {token, user}
+      const token = jwt.sign({
+        id: user.id,
+        email
+      }, JWT_SECRET)
+      return {
+        token,
+        user
+      }
     },
     // async deleteUser (_, {id, groups, notify}, context) {
     //   const userId = getUserId(request)
@@ -484,7 +728,14 @@ const resolvers = {
     //   )
     //   return true
     // },
-    async createGroup (_, {name, initials, avatarColor, users}, {request}) {
+    async createGroup(_, {
+      name,
+      initials,
+      avatarColor,
+      users
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
       const team = (await User.findById(userId)).team
       return await Group.create({
@@ -495,62 +746,125 @@ const resolvers = {
         users
       })
     },
-    async addUsersToGroup (_, {id, users}, {request}) {
+    async addUsersToGroup(_, {
+      id,
+      users
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      return await Group.findOneAndUpdate(
-        { _id: id },
-        { $push: { users: { $each: users } } },
-        { new: true }
-      )
+      return await Group.findOneAndUpdate({
+        _id: id
+      }, {
+        $push: {
+          users: {
+            $each: users
+          }
+        }
+      }, {
+        new: true
+      })
     },
-    async removeUsersFromGroup (_, {id, users}, {request}) {
+    async removeUsersFromGroup(_, {
+      id,
+      users
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      return await Group.findOneAndUpdate(
-        { _id: id },
-        { $pullAll: { users } },
-        { new: true }
-      )
+      return await Group.findOneAndUpdate({
+        _id: id
+      }, {
+        $pullAll: {
+          users
+        }
+      }, {
+        new: true
+      })
     },
-    async updateGroup (_, {id, name, initials, avatarColor}, {request}) {
+    async updateGroup(_, {
+      id,
+      name,
+      initials,
+      avatarColor
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      return await Group.findOneAndUpdate(
-        { _id: id },
-        { $set: { name, initials, avatarColor } },
-        { new: true }
-      )
+      return await Group.findOneAndUpdate({
+        _id: id
+      }, {
+        $set: {
+          name,
+          initials,
+          avatarColor
+        }
+      }, {
+        new: true
+      })
     },
-    async deleteGroup (_, {id}, {request}) {
+    async deleteGroup(_, {
+      id
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      await Group.deleteOne({_id: id})
+      await Group.deleteOne({
+        _id: id
+      })
       return true
     },
-    async updateUser(_, {id, input}, {request}) {
+    async updateUser(_, {
+      id,
+      input
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      return await User.findOneAndUpdate(
-        { _id: id || userId },
-        { $set: input },
-        { new: true }
-      )
+      return await User.findOneAndUpdate({
+        _id: id || userId
+      }, {
+        $set: input
+      }, {
+        new: true
+      })
     },
-    async createRecord (_, {input}, {request}) {
+    async createRecord(_, {
+      input
+    }, {
+      request
+    }) {
       const user = getUserId(request)
       return await Record.create({
         ...input,
         user
       })
     },
-    async updateRecord (_, {id, input}, {request}) {
+    async updateRecord(_, {
+      id,
+      input
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      return await Record.findOneAndUpdate(
-        { _id: id },
-        { $set: input },
-        { new: true }
-      )
+      return await Record.findOneAndUpdate({
+        _id: id
+      }, {
+        $set: input
+      }, {
+        new: true
+      })
     },
-    async deleteRecord (_, {id}, {request}) {
+    async deleteRecord(_, {
+      id
+    }, {
+      request
+    }) {
       const userId = getUserId(request)
-      await Record.deleteOne({_id: id})
-      return true      
+      await Record.deleteOne({
+        _id: id
+      })
+      return true
     }
   },
   // Subscription: {
